@@ -83,7 +83,7 @@ def make_cmap_gray(x):
 
 def setup_tgts(season, monf=False):
 	#if a value is provided for monf, it must be [initialization month for JJAS, initialization month for OND] THIS IS THE ONLY WAY IT WORKS
-	if season != 'Both' and monf != False:
+	if season != 'All' and monf != False:
 		print('if a value is provided for monf, it must be [initialization month for JJAS, initialization month for OND]')
 		sys.exit()
 		return
@@ -104,13 +104,21 @@ def setup_tgts(season, monf=False):
 		tgtf = ['3.5']
 		return tgts, mons, monf, tgti, tgtf
 
-	if season == 'Both':
-		tgts = ['Jun-Sep', 'Oct-Dec']
+	if season == 'DJF':
+		tgts = ['Dec-Feb']
+		mons = ['Nov']
+		monf = ['Nov']
+		tgti = ['1.5']
+		tgtf = ['3.5']
+		return tgts, mons, monf, tgti, tgtf
+
+	if season == 'All':
+		tgts = ['Jun-Sep', 'Oct-Dec', 'Dec-Feb']
 		if monf == False:
-			monf = ['May', 'Sep']
+			monf = ['May', 'Sep', 'Nov']
 		mons = monf
-		tgti = ['1.5', '1.5']
-		tgtf = ['4.5', '3.5']
+		tgti = ['1.5', '1.5', '1.5']
+		tgtf = ['4.5', '3.5', '3.5']
 		return tgts, mons, monf, tgti, tgtf
 
 	print('Invalid season selection')
@@ -207,7 +215,7 @@ def setup_params(PREDICTOR,obs,MOS,tini,tend, tgts):
 		ntrain= tend-tini + 1# length of training period
 
 	fprefix = PREDICTOR
-	return rainfall_frequency,threshold_pctle,wetday_threshold,obs_source,hdate_last,mpref,L,ntrain,fprefix, nmonths, ndays
+	return rainfall_frequency,threshold_pctle,wetday_threshold,obs_source,hdate_last,mpref,L,ntrain,fprefix, nmonths, ndays, 'FCST_xvPr', 'None'
 
 
 
