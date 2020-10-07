@@ -81,11 +81,49 @@ def make_cmap_gray(x):
 	colors.reverse()
 	return LinearSegmentedColormap.from_list( "matlab_clone", colors, N=x)
 
+def setup_tgts(season, monf=False):
+	#if a value is provided for monf, it must be [initialization month for JJAS, initialization month for OND] THIS IS THE ONLY WAY IT WORKS
+	if season != 'Both' and monf != False:
+		print('if a value is provided for monf, it must be [initialization month for JJAS, initialization month for OND]')
+		sys.exit()
+		return
+
+	if season == 'JJAS':
+		tgts = ['Jun-Sep']
+		mons = ['May']
+		monf = ['May']
+		tgti = ['1.5']
+		tgtf = ['4.5']
+		return tgts, mons, monf, tgti, tgtf
+
+	if season == 'OND':
+		tgts = ['Oct-Dec']
+		mons = ['Sep']
+		monf = ['Sep']
+		tgti = ['1.5']
+		tgtf = ['3.5']
+		return tgts, mons, monf, tgti, tgtf
+
+	if season == 'Both':
+		tgts = ['Jun-Sep', 'Oct-Dec']
+		if monf == False:
+			monf = ['May', 'Sep']
+		mons = monf
+		tgti = ['1.5', '1.5']
+		tgtf = ['4.5', '3.5']
+		return tgts, mons, monf, tgti, tgtf
+
+	print('Invalid season selection')
+	sys.exit()
+
+
 def setup_params(PREDICTOR,obs,MOS,tini,tend, tgts):
 	"""PyCPT setup"""
 	#global rainfall_frequency,threshold_pctle,wetday_threshold,obs_source,hdate_last,mpref,L,ntrain,fprefix, nmonths, ndays
 	days_in_month_dict = {"Jan": 31, "Feb": 28, "Mar": 31, "Apr": 30, "May": 31, "Jun": 30, "Jul": 31, "Aug": 31, "Sep": 30, "Oct": 31, "Nov": 30, "Dec": 31}
 	months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+
 	if '-' in tgts:
 		mon_ini, mon_fin = tgts.split('-')
 		nmonths, ndays, flag = 0, 0, 0
@@ -369,9 +407,11 @@ def plteofs(models,predictand,mode,M,loni,lone,lati,late,fprefix,mpref,tgts,mol,
 	#plt.figure(figsize=(20,10))
 	#fig, ax = plt.subplots(figsize=(20,15),sharex=True,sharey=True)
 	fig, ax = plt.subplots(nrows=nmods, ncols=nsea, sharex=False,sharey=False, figsize=(10*nsea,6*nmods), subplot_kw={'projection': ccrs.PlateCarree()})
-	if nsea == 1:
-		ax = [ax]
-	if nmods == 1:
+	if nsea==1 and nmods == 1:
+		ax = [[ax]]
+	elif nsea == 1:
+		ax = [[ax[q]] for q in range(nmods)]
+	elif nmods == 1:
 		ax = [ax]
 
 	#current_cmap = plt.cm.get_cmap('RdYlBu', 14)
@@ -539,7 +579,7 @@ def plteofs(models,predictand,mode,M,loni,lone,lati,late,fprefix,mpref,tgts,mol,
 			f.close()
 			model_names = ['obs']
 			model_names.extend(models)
-			fig.savefig('./images/EOF{}_{}_{}.png'.format(mode, model_names[i], mons[j]), dpi=500, bbox_inches='tight')
+	fig.savefig('./images/EOF{}.png'.format(mode+1), dpi=500, bbox_inches='tight')
 	plt.show()
 			#plt.setp([a.get_xticklabels() for a in fig.axes[:-1]], visible=False)
 			#cbar_ax = plt.add_axes([0.85, 0.15, 0.05, 0.7])
@@ -574,10 +614,13 @@ def pltmap(models,predictand,score,loni,lone,lati,late,fprefix,mpref,tgts, mo, m
 	#fig = plt.figure(figsize=(20,40))
 	#ax = [ plt.subplot2grid((nmods+1, nsea), (int(np.floor(nd / nsea)), int(nd % nsea)),rowspan=1, colspan=1, projection=ccrs.PlateCarree()) for nd in range(nmods*nsea) ]
 	#ax.append(plt.subplot2grid((nmods+1, nsea), (nmods, 0), colspan=nsea ) )
-	if nsea == 1:
+	if nsea==1 and nmods == 1:
+		ax = [[ax]]
+	elif nsea == 1:
+		ax = [[ax[q]] for q in range(nmods)]
+	elif nmods == 1:
 		ax = [ax]
-	if nmods == 1:
-		ax = [ax]
+
 	if score not in ['Pearson','Spearman']:
 		#urrent_cmap = plt.cm.get_cmap('RdYlBu', 10 )
 		current_cmap = make_cmap(10)
@@ -751,10 +794,11 @@ def pltmap(models,predictand,score,loni,lone,lati,late,fprefix,mpref,tgts, mo, m
 					cbar = fig.colorbar(CS, ax=ax[i][j], cax=axins, orientation='vertical', pad=0.02, ticks=bounds)
 				cbar.set_label(label) #, rotation=270)\
 				#axins.yaxis.tick_left()
-			filename = models[i] + '-' + mons[j] + '-' + score
-			fig.savefig('./images/' + filename + '.png', dpi=500, bbox_inches='tight')
+
 			f.close()
 		fig.tight_layout()
+	filename = models[0] + '_' + score
+	fig.savefig('./images/' + filename + '.png', dpi=500, bbox_inches='tight')
 	plt.tight_layout()
 	plt.show()
 
@@ -954,7 +998,7 @@ def plt_ng_probabilistic(models,predictand,loni,lone,lati,late,fprefix,mpref,mon
 			cbar_fbr = fig.colorbar(CS3, ax=ax[i][j],  cax=axins3_bottom, orientation='horizontal', ticks=bounds)
 			cbar_fbr.set_label('AN Probability (%)') #, rotation=270)\
 
-	fig.savefig('./images/NG_Probabilistic_RealtimeForecast_{}.png'.format(mons[j]), dpi=500, bbox_inches='tight')
+	fig.savefig('./images/NG_Probabilistic_RealtimeForecasts.png', dpi=500, bbox_inches='tight')
 	#fig.tight_layout(pad=10.0)
 
 
@@ -1072,7 +1116,7 @@ def plt_ng_deterministic(models,predictand,loni,lone,lati,late,fprefix,mpref,mon
 	               	borderpad=0.1 )
 				cbar_bdet = fig.colorbar(CS_det, ax=ax[i][j],  cax=axins_det, orientation='horizontal', pad = 0.02)
 				cbar_bdet.set_label(labels[i])
-	fig.savefig('./images/NG_Deterministic_RealtimeForecast_{}.png'.format(mons[j]), dpi=500, bbox_inches='tight')
+	fig.savefig('./images/NG_Deterministic_RealtimeForecasts.png', dpi=500, bbox_inches='tight')
 
 #	fig.tight_layout(pad=10.0)
 
@@ -2282,9 +2326,9 @@ def CPTscript(model,predictand, mon,monf,fyr,nla1,sla1,wlo1,elo1,nla2,sla2,wlo2,
 		f.write("0\n")
 		f.close()
 		if platform.system() == 'Windows':
-			get_ipython().system("copy ./scripts/params "+model+"_"+fprefix+"_"+mpref+"_"+tar+"_"+mon+".cpt")
+			get_ipython().system("copy ./scripts/params "+"./scripts/"+ model+"_"+fprefix+"_"+mpref+"_"+tar+"_"+mon+".cpt")
 		else:
-			get_ipython().system("cp ./scripts/params "+model+"_"+fprefix+"_"+mpref+"_"+tar+"_"+mon+".cpt")
+			get_ipython().system("cp ./scripts/params " + "./scripts/"+model+"_"+fprefix+"_"+mpref+"_"+tar+"_"+mon+".cpt")
 
 
 def ensemblefiles(models,work):
@@ -2316,11 +2360,11 @@ def ensemblefiles(models,work):
 			get_ipython().system("cd .")
 			print('cd .')
 			get_ipython().system("copy ./output/*"+models[i]+"*.txt NextGen")
-			print('copy ./output/*' + models[i] + "*.txt ./NextGen/")
+			print('copy ./output/*' + models[i] + "*.txt ./output/NextGen/")
 		else:
-			get_ipython().system("cp ./output/*"+models[i]+"*.txt .")
+			get_ipython().system("cp ./output/*"+models[i]+"*.txt ./output/NextGen")
 
-	get_ipython().system("tar cvzf ./output/NextGen/"+work+"_NextGen.tgz *.txt") #this ~should~ be fine ? unless they have a computer older than last march 2019
+	get_ipython().system("tar cvzf ./output/NextGen/"+work+"_NextGen.tgz ./output/NextGen/*.txt") #this ~should~ be fine ? unless they have a computer older than last march 2019
 	print("tar cvzf ./output/NextGen/"+work+"_NextGen.tgz *.txt")
 	if platform.system() == 'Windows':
 		get_ipython().system("echo %cd%")
