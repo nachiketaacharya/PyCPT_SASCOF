@@ -10,6 +10,8 @@ from copy import copy
 from scipy.stats import t
 from scipy.stats import invgamma
 import cartopy.crs as ccrs
+from cartopy.io.shapereader import Reader
+from cartopy.feature import ShapelyFeature
 from cartopy import feature
 import cartopy.mpl.ticker as cticker
 import matplotlib.pyplot as plt
@@ -196,7 +198,9 @@ def setup_params(PREDICTOR,obs,MOS,tini,tend, tgts):
 		obs_source = 'SOURCES/.Bangladesh/.BMD/.monthly/.rainfall/.rfe_merged/'+str(nmonths)+'/mul'
 		hdate_last = 2020
 	else:
-	    print ("Obs option is invalid")
+		obs_source = 'None'
+		hdate_last=2020
+		print ("Obs option is invalid - if you're using local data this is OK")
 
 	########MOS-dependent parameters
 	if MOS=='None':
@@ -221,13 +225,13 @@ def setup_params(PREDICTOR,obs,MOS,tini,tend, tgts):
 
 class MidpointNormalize(colors.Normalize):
     def __init__(self, vmin=None, vmax=None, midpoint=None, clip=False):
-        self.midpoint = midpoint
+        midpoint = midpoint
         colors.Normalize.__init__(self, vmin, vmax, clip)
 
     def __call__(self, value, clip=None):
         # Ignoring masked values and all kinds of edge cases to make a
         # simple example..
-        x, y = [self.vmin, self.midpoint, self.vmax], [0, 0.5, 1]
+        x, y = [vmin, midpoint, vmax], [0, 0.5, 1]
         return np.ma.masked_array(np.interp(value, x, y))
 
 def replaceAll(file,searchExp,replaceExp):
@@ -255,11 +259,11 @@ def readGrADSctl(models,fprefix,predictand,mpref,id,tar,monf,fyr):
 			TD= 1  #not used
 	return (W, Wi, XD, H, Hi, YD, T, Ti, TD)
 
-def PrepFiles(fprefix, predictand, threshold_pctle, wlo1, wlo2,elo1, elo2, sla1, sla2, nla1, nla2, tgti, tgtf, mon, monf, fyr, os, wetday_threshold, tar, model, obs_source, hdate_last, force_download, station, ndays, nmonths, tini, tend):
+def PrepFiles(fprefix, predictand, threshold_pctle, wlo1, wlo2,elo1, elo2, sla1, sla2, nla1, nla2, tgti, tgtf, mon, monf, fyr, os, wetday_threshold, tar, model, obs_source, hdate_last, force_download, station, ndays, nmonths, tini, tend, local_data_dir):
 	"""Function to download (or not) the needed files"""
 	print('Preparing CPT files for '+model+' and initialization '+mon+'...')
 	if fprefix=='RFREQ':
-		GetObs_RFREQ(predictand, wlo2, elo2, sla2, nla2, wetday_threshold, threshold_pctle, tar, obs_source, hdate_last, force_download,station)
+		GetObs_RFREQ(predictand, wlo2, elo2, sla2, nla2, wetday_threshold, threshold_pctle, tar, obs_source, hdate_last, force_download,station, local_data_dir)
 		print('Obs:rfreq file ready to go')
 		print('----------------------------------------------')
 #		nday added after nlag for GEFS & CFSv2
@@ -275,7 +279,7 @@ def PrepFiles(fprefix, predictand, threshold_pctle, wlo1, wlo2,elo1, elo2, sla1,
 		GetHindcasts_UQ(wlo1, elo1, sla1, nla1, tgti, tgtf, mon, os, tar, model, force_download)
 		print('Hindcasts file ready to go')
 		print('----------------------------------------------')
-		GetObs(predictand, wlo2, elo2, sla2, nla2, tar, obs_source, hdate_last, force_download,station,nmonths)
+		GetObs(predictand, wlo2, elo2, sla2, nla2, tar, obs_source, hdate_last, force_download,station,nmonths, local_data_dir)
 		print('Obs:precip file ready to go')
 		print('----------------------------------------------')
 		GetForecast_UQ(monf, fyr, tgti, tgtf, tar, wlo1, elo1, sla1, nla1, model, force_download)
@@ -285,7 +289,7 @@ def PrepFiles(fprefix, predictand, threshold_pctle, wlo1, wlo2,elo1, elo2, sla1,
 		GetHindcasts_VQ(wlo1, elo1, sla1, nla1, tgti, tgtf, mon, os, tar, model, force_download)
 		print('Hindcasts file ready to go')
 		print('----------------------------------------------')
-		GetObs(predictand, wlo2, elo2, sla2, nla2, tar, obs_source, hdate_last, force_download,station,nmonths)
+		GetObs(predictand, wlo2, elo2, sla2, nla2, tar, obs_source, hdate_last, force_download,station,nmonths, local_data_dir)
 		print('Obs:precip file ready to go')
 		print('----------------------------------------------')
 		GetForecast_VQ(monf, fyr, tgti, tgtf, tar, wlo1, elo1, sla1, nla1, model, force_download)
@@ -295,14 +299,14 @@ def PrepFiles(fprefix, predictand, threshold_pctle, wlo1, wlo2,elo1, elo2, sla1,
 		GetHindcasts(tini, tend, wlo1, elo1, sla1, nla1, tgti, tgtf, mon, os, nmonths, tar, model, force_download)
 		print('Hindcasts file ready to go')
 		print('----------------------------------------------')
-		GetObs( predictand, wlo2, elo2, sla2, nla2, tar, obs_source, hdate_last, force_download,station,nmonths)
+		GetObs( predictand, wlo2, elo2, sla2, nla2, tar, obs_source, hdate_last, force_download,station,nmonths, local_data_dir)
 		print('Obs:precip file ready to go')
 		print('----------------------------------------------')
 		GetForecast( monf, fyr, tgti, tgtf, tar, wlo1, elo1, sla1, nla1, nmonths, model, force_download)
 		print('Forecasts file ready to go')
 		print('----------------------------------------------')
 
-def pltdomain(loni1,lone1,lati1,late1,loni2,lone2,lati2,late2):
+def pltdomain(loni1,lone1,lati1,late1,loni2,lone2,lati2,late2, shp_file="None"):
 	"""A simple plot function for the geographical domain
 
 	PARAMETERS
@@ -323,7 +327,14 @@ def pltdomain(loni1,lone1,lati1,late1,loni2,lone2,lati2,late2):
 	#ax.add_feature(cfeature.LAND)
     #ax.add_feature(cfeature.COASTLINE)
     #ax.add_feature(states_provinces, edgecolor='gray')
-
+	good = False
+	if shp_file != "None":
+		try:
+			shape_feature = ShapelyFeature(Reader(shp_file).geometries(), ccrs.PlateCarree(), facecolor='none')
+			good = True
+		except:
+			print('Failed to load custom shape file')
+			good = False
 
 	fig = plt.subplots(figsize=(15,15), subplot_kw=dict(projection=ccrs.PlateCarree()))
 	loni = [loni1,loni2]
@@ -351,7 +362,11 @@ def pltdomain(loni1,lone1,lati1,late1,loni2,lone2,lati2,late2):
 		pl.ylabels_left = False
 		pl.xformatter = LONGITUDE_FORMATTER
 		pl.yformatter = LATITUDE_FORMATTER
-		ax.add_feature(states_provinces, edgecolor='black')
+		if shp_file == "None" or good == False and shp_file != "None":
+			ax.add_feature(states_provinces, edgecolor='black')
+		else:
+			ax.add_feature(shape_feature, edgecolor='black')
+
 		#states_provinces = cfeature.NaturalEarthFeature(
         #category='cultural',
         #name='admin_1_states_provinces_lines',
@@ -360,7 +375,9 @@ def pltdomain(loni1,lone1,lati1,late1,loni2,lone2,lati2,late2):
 	plt.savefig("./images/domain_{}_{}_{}_{}.png".format(loni[0],lone[0],lati[0],late[0]),dpi=300, bbox_inches='tight') #SAVE_FILE 0_domain.png
 	plt.show()
 
-def plteofs(models,predictand,mode,M,loni,lone,lati,late,fprefix,mpref,tgts,mol,mons,fyr, obs):
+
+
+def plteofsold(models,predictand,mode,M,loni,lone,lati,late,fprefix,mpref,tgts,mol,mons,fyr, obs):
 	"""A simple function for ploting EOFs computed by CPT
 
 	PARAMETERS
@@ -468,8 +485,10 @@ def plteofs(models,predictand,mode,M,loni,lone,lati,late,fprefix,mpref,tgts,mol,
 			pl.xlabels_bottom = True
 			pl.xformatter = LONGITUDE_FORMATTER
 			pl.yformatter = LATITUDE_FORMATTER
-			ax[i][j].add_feature(states_provinces, edgecolor='black')
-
+			if shp_file == "None" or good == False and shp_file != "None":
+				ax.add_feature(states_provinces, edgecolor='black')
+			else:
+				ax.add_feature(shape_feature, edgecolor='black')
 			if obs == 'ENACTS-BD' and i ==0:
 				ax[i][j].set_ybound(lower=20.5, upper=27)
 				ax[i][j].set_xbound(lower=87.5, upper=93)
@@ -598,7 +617,286 @@ def plteofs(models,predictand,mode,M,loni,lone,lati,late,fprefix,mpref,tgts,mol,
 	#cax = plt.axes([0.2, 0.08, 0.6, 0.04])
 
 
-def pltmap(models,predictand,score,loni,lone,lati,late,fprefix,mpref,tgts, mo, mons, obs):
+
+def plteofs(models,PREDICTAND,mode,M,wlo1,elo1,sla1,nla1,wlo2,elo2,sla2,nla2,fprefix,mpref,tgts,mol,mons,fyr, obs, shp_file="None"):
+	good = False
+	if shp_file != "None":
+		try:
+			shape_feature = ShapelyFeature(Reader(shp_file).geometries(), ccrs.PlateCarree(), facecolor='none')
+			good = True
+		except:
+			print('Failed to load custom shape file')
+
+
+	#mol=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+	if mpref=='None':
+		print('No EOFs are computed if MOS=None is used')
+		return
+	print('\n\n\n-------------EOF {}-------------\n'.format(mode+1))
+
+	if mpref == 'CCA':
+		nmods=len(models) + 1 #nmods + obs
+	else:
+		nmods = len(models)
+	nsea=len(mons)
+	tari=tgts[0]
+	model=models[0]
+	monn=mons[0]
+
+	data = [[[[] for k in range(M)] for j in range(nsea)] for i in range(nmods)]
+
+	with open('./output/'+model+'_'+fprefix+PREDICTAND+'_'+mpref+'_EOFX_'+tari+'_'+monn+'.ctl', "r") as fp:
+		for line in lines_that_contain("XDEF", fp):
+			W = int(line.split()[1])
+			XD= float(line.split()[4])
+	with open('./output/'+model+'_'+fprefix+PREDICTAND+'_'+mpref+'_EOFX_'+tari+'_'+monn+'.ctl', "r") as fp:
+		for line in lines_that_contain("YDEF", fp):
+			H = int(line.split()[1])
+			YD= float(line.split()[4])
+
+	if mpref=='CCA':
+		with open('./output/'+model+'_'+fprefix+PREDICTAND+'_'+mpref+'_EOFY_'+tari+'_'+monn+'.ctl', "r") as fp:
+			for line in lines_that_contain("XDEF", fp):
+				Wy = int(line.split()[1])
+				XDy= float(line.split()[4])
+		with open('./output/'+model+'_'+fprefix+PREDICTAND+'_'+mpref+'_EOFY_'+tari+'_'+monn+'.ctl', "r") as fp:
+			for line in lines_that_contain("YDEF", fp):
+				Hy = int(line.split()[1])
+				YDy= float(line.split()[4])
+		eofy=np.empty([M,Hy,Wy])  #define array for later use
+		datay = [[[[] for k in range(M)] for j in range(nsea)] for i in range(nmods)]
+
+
+	eofx=np.empty([M,H,W])  #define array for later use
+
+	#plt.figure(figsize=(20,10))
+	#fig, ax = plt.subplots(figsize=(20,15),sharex=True,sharey=True)
+	fig, ax = plt.subplots(nrows=nmods, ncols=nsea, sharex=False,sharey=False, figsize=(10*nsea,6*nmods), subplot_kw={'projection': ccrs.PlateCarree()})
+	if nsea==1 and nmods == 1:
+		ax = [[ax]]
+	elif nsea == 1:
+		ax = [[ax[q]] for q in range(nmods)]
+	elif nmods == 1:
+		ax = [ax]
+
+	#current_cmap = plt.cm.get_cmap('RdYlBu', 14)
+	current_cmap = make_cmap(14)
+	#current_cmap.set_bad('white',1.0)
+	#current_cmap.set_under('white', 1.0)
+
+	for i in range(nmods):
+		for j in range(nsea):
+
+			tari=tgts[j]
+			if i == 0 and mpref=='CCA':
+				model = models[0]
+			elif mpref=='CCA' and i > 0:
+				model=models[i-1]
+			else:
+				model = models[i]
+
+
+
+			if i == 0 and obs == 'ENACTS-BD':
+				ax[i][j].set_extent([87.5,93,20.5,27], crs=ccrs.PlateCarree())
+			else:
+				if mpref=='PCR':
+					ax[i][j].set_extent([wlo1,wlo1+W*XD,sla1,sla1+H*YD], crs=ccrs.PlateCarree())  #EOF domains will look different between CCA and PCR if X and Y domains are different
+				else:
+					ax[i][j].set_extent([wlo1,wlo1+Wy*XDy,sla1,sla1+Hy*YDy], crs=ccrs.PlateCarree())
+
+			#Create a feature for States/Admin 1 regions at 1:10m from Natural Earth
+			states_provinces = feature.NaturalEarthFeature(
+				category='cultural',
+#				name='admin_1_states_provinces_shp',
+				name='admin_0_countries',
+				scale='10m',
+				facecolor='none')
+
+			ax[i][j].add_feature(feature.LAND)
+
+			#ax[i][j].add_feature(feature.COASTLINE)
+
+			#tick_spacing=0.5
+			#ax.xaxis.set_major_locator(ticker.MultipleLocator(tick_spacing))
+
+			pl=ax[i][j].gridlines(crs=ccrs.PlateCarree(), draw_labels=True,
+				  linewidth=1, color='gray', alpha=0.5, linestyle=(0,(2,4)))
+			pl.xlabels_top = False
+			pl.ylabels_left = True
+			pl.ylabels_right = False
+			pl.xlabels_bottom = True
+			pl.xformatter = LONGITUDE_FORMATTER
+			pl.yformatter = LATITUDE_FORMATTER
+			if shp_file == "None" or good == False and shp_file != "None":
+				ax[i][j].add_feature(states_provinces, edgecolor='black')
+			else:
+				ax[i][j].add_feature(shape_feature, edgecolor='black')
+
+
+
+			if mpref == 'CCA':
+				if obs == 'ENACTS-BD' and i ==0:
+					ax[i][j].set_ybound(lower=20.5, upper=27)
+					ax[i][j].set_xbound(lower=87.5, upper=93)
+				elif obs != 'ENACTS-BD' and i == 0:
+					ax[i][j].set_ybound(lower=sla2, upper=nla2)
+					ax[i][j].set_xbound(lower=wlo2, upper=elo2)
+				else:
+					ax[i][j].set_ybound(lower=sla1, upper=nla1)
+					ax[i][j].set_xbound(lower=wlo1, upper=elo1)
+			else:
+				ax[i][j].set_ybound(lower=sla1, upper=nla1)
+				ax[i][j].set_xbound(lower=wlo1, upper=elo1)
+
+
+			if j == 0:
+				if i == 0 and mpref == 'CCA':
+					ax[i][j].text(-0.42, 0.5, 'Obs',rotation='vertical', verticalalignment='center', horizontalalignment='center', transform=ax[i][j].transAxes)
+				elif i > 0 and mpref == 'CCA':
+					ax[i][j].text(-0.42, 0.5, models[i-1],rotation='vertical', verticalalignment='center', horizontalalignment='center', transform=ax[i][j].transAxes)
+				else:
+					ax[i][j].text(-0.42, 0.5, models[i],rotation='vertical', verticalalignment='center', horizontalalignment='center', transform=ax[i][j].transAxes)
+
+
+			if i == 0: #kjch101620
+				ax[i][j].set_title(tgts[j])
+			#Since CPT writes grads files in sequential format, we need to excise the 4 bytes between records (recl)
+			if i ==0:
+				tari=tgts[j]
+				model=models[0]
+				monn=mons[0]
+				nsea=len(mons)
+				tar = tgts[j]
+				mon=mons[j]
+				if mpref == 'CCA':
+					#f=open('./output/'+models[0]+'_'+fprefix+predictand+'_'+mpref+'FCST_Obs_'+mons[j]+'_'+mon+str(fyr)+'.dat','rb')
+					#f=open('./output/'+models[i-1]+'_'+fprefix+predictand+'_'+mpref+'_EOFX_'+mons[j]+'_'+mon+'.dat','rb')
+					f=open('./output/'+model+'_'+fprefix+PREDICTAND+'_'+mpref+'_EOFY_'+tar+'_'+mon+'.dat','rb')
+					#cycle for all time steps  (same approach to read GrADS files as before, but now read T times)
+					for mo in range(M):
+						#Now we read the field
+						if platform.system() == "Windows":
+							garb = struct.unpack('s', f.read(1))[0]
+						recl=struct.unpack('i',f.read(4))[0]
+						numval=int(recl/np.dtype('float32').itemsize) #this if for each time/EOF stamp
+						A0=np.fromfile(f,dtype='float32',count=numval)
+						endrec=struct.unpack('i',f.read(4))[0]  #needed as Fortran sequential repeats the header at the end of the record!!!
+						if platform.system() == "Windows":
+							garb = struct.unpack('s', f.read(1))[0]
+						A0[A0==-999.] = np.nan
+						data[i][j][mo]= np.transpose(A0.reshape((Wy, Hy), order='F'))
+					eofy[eofy==-999.]=np.nan #nans
+
+
+					if obs == 'ENACTS-BD':
+						CS=ax[i][j].pcolormesh(np.linspace(87.6, 93.0,num=Wy), np.linspace(27.1, 20.4, num=Hy), data[i][j][mode],
+						cmap=current_cmap,
+						transform=ccrs.PlateCarree())
+					else:
+					#CS=ax[i][j].pcolormesh(np.linspace(loni, loni+Wy*XDy,num=Wy), np.linspace(lati+Hy*YDy, lati, num=Hy), eofy[mode,:,:],
+						CS=ax[i][j].pcolormesh(np.linspace(wlo1, elo1,num=Wy), np.linspace(nla1, sla1, num=Hy), data[i][j][mode],
+						cmap=current_cmap,
+						transform=ccrs.PlateCarree())
+
+					label = 'EOF charges'
+				else:
+					mon=mons[j]
+					f=open('./output/'+model+'_'+fprefix+PREDICTAND+'_'+mpref+'_EOFX_'+tgts[j]+'_'+mon+'.dat','rb')
+					#cycle for all time steps  (same approach to read GrADS files as before, but now read T times)
+					for mo in range(M):
+						#Now we read the field
+						if platform.system() == "Windows":
+							garb = struct.unpack('s', f.read(1))[0]
+						recl=struct.unpack('i',f.read(4))[0]
+						numval=int(recl/np.dtype('float32').itemsize) #this if for each time/EOF stamp
+						A0=np.fromfile(f,dtype='float32',count=numval)
+						endrec=struct.unpack('i',f.read(4))[0]  #needed as Fortran sequential repeats the header at the end of the record!!!
+						if platform.system() == "Windows":
+							garb = struct.unpack('s', f.read(1))[0]
+						A0[A0==-999.]=np.nan
+						data[i][j][mo] = np.transpose(A0.reshape((W, H), order='F'))
+						eofx[mo,:,:]= np.transpose(A0.reshape((W, H), order='F'))
+
+					eofx[eofx==-999.]=np.nan #nans
+					CS=ax[i][j].pcolormesh(np.linspace(wlo1, wlo1+W*XD,num=W), np.linspace(sla1+H*YD, sla1, num=H), data[i][j][mode],
+					vmin=-.105, vmax=.105,
+					cmap=current_cmap,
+					transform=ccrs.PlateCarree())
+					label = 'EOF charges'
+
+			else:
+				mon=mons[j]
+				if mpref == 'CCA':
+					f=open('./output/'+models[i-1]+'_'+fprefix+PREDICTAND+'_'+mpref+'_EOFX_'+tgts[j]+'_'+mon+'.dat','rb')
+				else:
+					f=open('./output/'+models[i]+'_'+fprefix+PREDICTAND+'_'+mpref+'_EOFX_'+tgts[j]+'_'+mon+'.dat','rb')
+
+				#cycle for all time steps  (same approach to read GrADS files as before, but now read T times)
+				for mo in range(M):
+					#Now we read the field
+					if platform.system() == "Windows":
+						garb = struct.unpack('s', f.read(1))[0]
+					recl=struct.unpack('i',f.read(4))[0]
+					numval=int(recl/np.dtype('float32').itemsize) #this if for each time/EOF stamp
+					A0=np.fromfile(f,dtype='float32',count=numval)
+					endrec=struct.unpack('i',f.read(4))[0]  #needed as Fortran sequential repeats the header at the end of the record!!!
+					if platform.system() == "Windows":
+						garb = struct.unpack('s', f.read(1))[0]
+					A0[A0==-999.]=np.nan
+					data[i][j][mo] = np.transpose(A0.reshape((W, H), order='F'))
+					eofx[mo,:,:]= np.transpose(A0.reshape((W, H), order='F'))
+
+				eofx[eofx==-999.]=np.nan #nans
+				CS=ax[i][j].pcolormesh(np.linspace(wlo1, wlo1+W*XD,num=W), np.linspace(sla1+H*YD, sla1, num=H), data[i][j][mode],
+				vmin=-.105, vmax=.105,
+				cmap=current_cmap,
+				transform=ccrs.PlateCarree())
+				label = 'EOF charges'
+
+			is_left = False
+			if is_left:
+				axins = inset_axes(ax[i][j],
+	                   width="5%",  # width = 5% of parent_bbox width
+	                   height="100%",  # height : 50%
+	                   loc='center left',
+	                   bbox_to_anchor=(-0.22, 0., 1, 1),
+	                   bbox_transform=ax[i][j].transAxes,
+	                   borderpad=0.1,
+	                   )
+			else:
+				axins = inset_axes(ax[i][j],
+	                   width="5%",  # width = 5% of parent_bbox width
+	                   height="100%",  # height : 50%
+	                   loc='center right',
+	                   bbox_to_anchor=(0., 0., 1.15, 1),
+	                   bbox_transform=ax[i][j].transAxes,
+	                   borderpad=0.1,
+	                   )
+			if mpref == "CCA" and i == 0:
+				cbar = plt.colorbar(CS,ax=ax[i][j], cax=axins, orientation='vertical', pad=0.01)
+
+			else:
+				cbar = plt.colorbar(CS,ax=ax[i][j], cax=axins, orientation='vertical', pad=0.01, ticks= [-0.09, -0.075, -0.06, -0.045, -0.03, -0.015, 0, 0.015, 0.03, 0.045, 0.06, 0.075, 0.09])
+			#cbar.set_label(label) #, rotation=270)
+			#axins.yaxis.tick_left()
+			f.close()
+	model_names = ['obs']
+	model_names.extend(models)
+	if models[0] == 'NextGen':
+		fig.savefig('./images/EOF{}_NextGen.png'.format(mode+1, dpi=500, bbox_inches='tight'))
+	else:
+		fig.savefig('./images/EOF{}_Models.png'.format(mode+1, dpi=500, bbox_inches='tight'))
+			#plt.setp([a.get_xticklabels() for a in fig.axes[:-1]], visible=False)
+			#cbar_ax = plt.add_axes([0.85, 0.15, 0.05, 0.7])
+			#plt.tight_layout()
+
+			#plt.autoscale(enable=True)
+	#plt.subplots_adjust(bottom=0.15, top=0.9)
+	#cax = plt.axes([0.2, 0.08, 0.6, 0.04])
+	plt.show()
+
+def pltmap(models,predictand,score,loni,lone,lati,late,fprefix,mpref,tgts, mo, mons, obs, shp_file="None"):
 	"""A simple function for ploting the statistical scores
 
 	PARAMETERS
@@ -609,6 +907,15 @@ def pltmap(models,predictand,score,loni,lone,lati,late,fprefix,mpref,tgts, mo, m
 		lati: southern latitude
 		late: northern latitude
 	"""
+
+	good = False
+	if shp_file != "None":
+		try:
+			shape_feature = ShapelyFeature(Reader(shp_file).geometries(), ccrs.PlateCarree(), facecolor='none')
+			good = True
+		except:
+			print('Failed to load custom shape file')
+
 	nmods=len(models)
 	nsea=len(mons)
 	if obs == 'ENACTS-BD':
@@ -679,7 +986,10 @@ def pltmap(models,predictand,score,loni,lone,lati,late,fprefix,mpref,tgts, mo, m
 			pl.xlabels_bottom = True
 			pl.xformatter = LONGITUDE_FORMATTER
 			pl.yformatter = LATITUDE_FORMATTER
-			ax[i][j].add_feature(states_provinces, edgecolor='black')
+			if shp_file == "None" or good == False and shp_file != "None":
+				ax[i][j].add_feature(states_provinces, edgecolor='black')
+			else:
+				ax[i][j].add_feature(shape_feature, edgecolor='black')
 			ax[i][j].set_ybound(lower=lati, upper=late)
 
 			if j == 0:
@@ -852,7 +1162,7 @@ def read_forecast(fcst_type, model, predictand, mpref, mons, mon, fyr):
 	return lats, longs, all_vals
 
 
-def plt_ng_probabilistic(models,predictand,loni,lone,lati,late,fprefix,mpref,mons, mon, fyr):
+def plt_ng_probabilistic(models,predictand,loni,lone,lati,late,fprefix,mpref,mons, mon, fyr, shp_file="None"):
 	"""A simple function for ploting the statistical scores
 
 	PARAMETERS
@@ -863,6 +1173,14 @@ def plt_ng_probabilistic(models,predictand,loni,lone,lati,late,fprefix,mpref,mon
 		lati: southern latitude
 		late: northern latitude
 	"""
+	good = False
+	if shp_file != "None":
+		try:
+			shape_feature = ShapelyFeature(Reader(shp_file).geometries(), ccrs.PlateCarree(), facecolor='none')
+			good = True
+		except:
+			print('Failed to load custom shape file')
+
 	cbar_loc, fancy = 'bottom', True
 	nmods=len(models)
 	nsea=len(mons)
@@ -946,7 +1264,10 @@ def plt_ng_probabilistic(models,predictand,loni,lone,lati,late,fprefix,mpref,mon
 			pl.yformatter = LATITUDE_FORMATTER
 			pl.xlabel_style = {'size': 8}#'rotation': 'vertical'}
 
-			ax[i][j].add_feature(states_provinces, edgecolor='black')
+			if shp_file == "None" or good == False and shp_file != "None":
+				ax[i][j].add_feature(states_provinces, edgecolor='black')
+			else:
+				ax[i][j].add_feature(shape_feature, edgecolor='black')
 			ax[i][j].set_ybound(lower=lati, upper=late)
 			titles = ["Deterministic Forecast", "Probabilistic Forecast (Dominant Tercile)"]
 
@@ -1012,7 +1333,7 @@ def plt_ng_probabilistic(models,predictand,loni,lone,lati,late,fprefix,mpref,mon
 
 
 
-def plt_ng_deterministic(models,predictand,loni,lone,lati,late,fprefix,mpref,mons, mon, fyr):
+def plt_ng_deterministic(models,predictand,loni,lone,lati,late,fprefix,mpref,mons, mon, fyr, shp_file="None"):
 	"""A simple function for ploting the statistical scores
 
 	PARAMETERS
@@ -1023,6 +1344,14 @@ def plt_ng_deterministic(models,predictand,loni,lone,lati,late,fprefix,mpref,mon
 		lati: southern latitude
 		late: northern latitude
 	"""
+	good = False
+	if shp_file != "None":
+		try:
+			shape_feature = ShapelyFeature(Reader(shp_file).geometries(), ccrs.PlateCarree(), facecolor='none')
+			good = True
+		except:
+			print('Failed to load custom shape file')
+
 	cbar_loc, fancy = 'bottom', True
 	nmods=len(models)
 	nsea=len(mons)
@@ -1082,7 +1411,10 @@ def plt_ng_deterministic(models,predictand,loni,lone,lati,late,fprefix,mpref,mon
 			pl.xlabels_bottom = True
 			pl.xformatter = LONGITUDE_FORMATTER
 			pl.yformatter = LATITUDE_FORMATTER
-			ax[i][j].add_feature(states_provinces, edgecolor='black')
+			if shp_file == "None" or good == False and shp_file != "None":
+				ax[i][j].add_feature(states_provinces, edgecolor='black')
+			else:
+				ax[i][j].add_feature(shape_feature, edgecolor='black')
 			ax[i][j].set_ybound(lower=lati, upper=late)
 			pl.xlabel_style = {'size': 8}#'rotation': 'vertical'}
 
@@ -1098,7 +1430,7 @@ def plt_ng_deterministic(models,predictand,loni,lone,lati,late,fprefix,mpref,mon
 			#fancy deterministic
 			var = ng_detfcst_by_season[j]
 			CS_det = ax[i][j].pcolormesh(np.linspace(longs[0], longs[-1],num=len(longs)), np.linspace(lats[0], lats[-1], num=len(lats)), var,
-				norm=MidpointNormalize(midpoint=0.),
+			#	norm=MidpointNormalize(midpoint=0.),
 				cmap=current_cmap)
 
 			if cbar_loc == 'left':
@@ -1659,15 +1991,25 @@ def GetHindcasts_VQ(wlo1, elo1, sla1, nla1, tgti, tgtf, mon, os, tar, model, for
 		#    c.close()
 		get_ipython().system("curl -k "+url+" > ./input/"+model+"_VQ_"+tar+"_ini"+mon+".tsv")
 
-def GetObs(predictand, wlo2, elo2, sla2, nla2, tar, obs_source, hdate_last, force_download,station, nmonths):
+def GetObs(predictand, wlo2, elo2, sla2, nla2, tar, obs_source, hdate_last, force_download,station, nmonths, local_data_dir):
+	good = False
 	if not force_download:
-		try:
-			ff=open('./input/' + "obs_"+predictand+"_"+tar+".tsv", 'r')
-			s = ff.readline()
-		except OSError as err:
-			print("\033[1mWarning:\033[0;0m {0}".format(err))
-			print("Obs precip file doesn't exist --\033[1mSOLVING: downloading file\033[0;0m")
-			force_download = True
+		if local_data_dir != "None":
+			try:
+				ff=open(local_data_dir + "obs_"+predictand+"_"+tar+".tsv", 'r')
+				s = ff.readline()
+				print("Found Your DATA")
+				good = True
+			except OSError as err:
+				print('Couldnt find your local data! Looking for previously downloaded IRI data.')
+		if not good:
+			try:
+				ff=open('./input/' + "obs_"+predictand+"_"+tar+".tsv", 'r')
+				s = ff.readline()
+			except OSError as err:
+				print("\033[1mWarning:\033[0;0m {0}".format(err))
+				print("Obs precip file doesn't exist --\033[1mSOLVING: downloading file\033[0;0m")
+				force_download = True
 
 	if force_download:
 		if obs_source=='home/.xchourio/.ACToday/.CHL/.prcp':
@@ -1695,14 +2037,24 @@ def GetObs(predictand, wlo2, elo2, sla2, nla2, tar, obs_source, hdate_last, forc
 
 
 def GetObs_RFREQ(predictand, wlo2, elo2, sla2, nla2, wetday_threshold, threshold_pctle, tar, obs_source, hdate_last, force_download,station):
+	good = False
 	if not force_download:
-		try:
-			ff=open('./input/' + "obs_"+predictand+"_"+tar+".tsv", 'r')
-			s = ff.readline()
-		except OSError as err:
-			print("\033[1mWarning:\033[0;0m {0}".format(err))
-			print("Obs freq-rainfall file doesn't exist --SOLVING: downloading file")
-			force_download = True
+		if local_data_dir != "None":
+			try:
+				ff=open(local_data_dir + "obs_"+predictand+"_"+tar+".tsv", 'r')
+				s = ff.readline()
+				print("Found Your DATA")
+				good = True
+			except OSError as err:
+				print('Couldnt find your local data checking for IRI Data')
+		if not good:
+			try:
+				ff=open('./input/' + "obs_"+predictand+"_"+tar+".tsv", 'r')
+				s = ff.readline()
+			except OSError as err:
+				print("\033[1mWarning:\033[0;0m {0}".format(err))
+				print("Obs freq-rainfall file doesn't exist --SOLVING: downloading file")
+				force_download = True
 
 	if force_download:
 		#Need to work on it
@@ -1885,7 +2237,7 @@ def setup_directories(workdir,working_directory, force_download, cptdir):
 	os.chdir(workdir)
 
 
-def CPTscript(model,predictand, mon,monf,fyr,nla1,sla1,wlo1,elo1,nla2,sla2,wlo2,elo2,fprefix,mpref,tar,ntrain,MOS,station, xmodes_min, xmodes_max, ymodes_min, ymodes_max, ccamodes_min, ccamodes_max, tini, tend):
+def CPTscript(model,predictand, mon,monf,fyr,nla1,sla1,wlo1,elo1,nla2,sla2,wlo2,elo2,fprefix,mpref,tar,ntrain,MOS,station, xmodes_min, xmodes_max, ymodes_min, ymodes_max, ccamodes_min, ccamodes_max, tini, tend, local_data_dir):
 		"""Function to write CPT namelist file
 
 		"""
@@ -1942,7 +2294,12 @@ def CPTscript(model,predictand, mon,monf,fyr,nla1,sla1,wlo1,elo1,nla2,sla2,wlo2,
 
 		# Opens Y input file
 		f.write("2\n")
-		file='./input/obs_'+predictand+'_'+tar+'.tsv\n'
+		if local_data_dir == "None" or not os.path.isfile(local_data_dir + 'obs_'+predictand+'_'+tar+'.tsv'):
+			print('Using IRI Obs data')
+			file='./input/obs_'+predictand+'_'+tar+'.tsv\n'
+		else:
+			print('Using your Data')
+			file = local_data_dir + 'obs_'+predictand+'_'+tar+'.tsv\n'
 		f.write(file)
 		if station==False:
 			# Nothernmost latitude
